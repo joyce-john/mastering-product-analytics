@@ -7,6 +7,10 @@ output: html_document
     code_folding: hide
 ---
 
+# Introduction  
+
+This is a sample analysis of key metrics for a software-as-a-service product. The usage data  is based off a real SaaS product; it has been subsampled and simplified for this task. We'll take a look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
+
 ```{r load libraries and data, warning=FALSE, message=FALSE}
 # libraries
 library(tidyverse)
@@ -20,6 +24,10 @@ registrations <- read_delim("registrations.csv", delim = ";")
 
 ```  
 
+# Acquisition  
+
+Let's start out by examining registrations. 
+
 ```{r group and count registrations, warning=FALSE, message=FALSE}
 
 # get registration counts grouped by month
@@ -27,10 +35,11 @@ registrations_by_month <-
   registrations %>% 
   group_by(registration_month) %>% 
   count() %>% # get counts
+  rename(count_registered = n) %>% 
   mutate(year = ifelse(registration_month %in% 1:12, "Previous Year", "Current Year")) %>% # label the years
   mutate(month_name = ifelse(registration_month %in% 1:12, month.name[registration_month], month.name[registration_month - 12])) %>% 
   group_by(month_name) %>% # convert numbers to month names
-  mutate(year_over_year = (n - lag(n, 1)) / lag(n,1)) %>%  # calculate year-over-year change
+  mutate(year_over_year = (count_registered - lag(count_registered, 1)) / lag(count_registered,1)) %>%  # calculate year-over-year change
   ungroup()
 
 ```
@@ -41,20 +50,20 @@ registrations_by_month <-
 # ggplot of registrations by month
 plot_registrations_by_month <-
   registrations_by_month %>% 
-  ggplot(aes(x = registration_month, y = n)) +
+  ggplot(aes(x = registration_month, y = count_registered)) +
   geom_col_interactive(fill = "lavenderblush4", 
                        aes(data_id = month_name, 
                            tooltip = paste0(month_name,
                                             "\n",
                                             "\n",
-                                            n, " registrations",
+                                            count_registered, " registrations",
                                             ifelse(is.na(year_over_year), 
                                                    "",
                                                    paste0("\n\n", 
                                                           scales::percent(year_over_year, accuracy = 0.01), 
                                                           " YOY change"))))) +
   theme_calc() +
-  labs(x = "Registration Month", y = "Count", title = "Registration Growth")
+  labs(x = "Month", y = "New Registrations", title = "Registration Growth")
 
 # show plot with highlight on month type when the user hovers
 ggiraph(ggobj = plot_registrations_by_month,
@@ -69,11 +78,12 @@ ggiraph(ggobj = plot_registrations_by_month,
 activity_by_month <- 
   activity %>% 
   group_by(activity_month) %>% 
-  count() %>% # get counts
+  count() %>% # get counts %>% 
+  rename(count_active = n) %>% 
   mutate(year = ifelse(activity_month %in% 1:12, "Previous Year", "Current Year")) %>% # label the years
   mutate(month_name = ifelse(activity_month %in% 1:12, month.name[activity_month], month.name[activity_month - 12])) %>% 
   group_by(month_name) %>% # convert numbers to month names
-  mutate(year_over_year = (n - lag(n, 1)) / lag(n,1)) %>%  # calculate year-over-year change
+  mutate(year_over_year = (count_active - lag(count_active, 1)) / lag(count_active,1)) %>%  # calculate year-over-year change
   ungroup()
 
 
@@ -87,13 +97,13 @@ activity_by_month <-
 # ggplot of activity by month
 plot_activity_by_month <-
   activity_by_month %>% 
-  ggplot(aes(x = activity_month, y = n)) +
+  ggplot(aes(x = activity_month, y = count_active)) +
   geom_col_interactive(fill = "honeydew4", 
                        aes(data_id = month_name, 
                            tooltip = paste0(month_name,
                                             "\n",
                                             "\n",
-                                            n, " active users",
+                                            count_active, " active users",
                                             ifelse(is.na(year_over_year), 
                                                    "",
                                                    paste0("\n\n", 
@@ -114,14 +124,50 @@ ggiraph(ggobj = plot_activity_by_month,
 
 # this is a tricky question...
 # you must use both registrations.csv and activity.csv
-# because not all registered users in month 1 were also active in month 1
+# because not all registered users in month 1 were active in month 1
 # therefore, some users who registered are only represented in registrations.csv
 
 monthly_cohort_retention <-
 activity %>% 
   group_by(registration_month, activity_month) %>% 
   count() %>% 
-  rename(count_active = n)
+  rename(count_active = n) %>% 
+  inner_join(registrations_by_month, by = "registration_month") %>% 
+  select(-year_over_year) %>%  # drop registration YOY
+  rename(registration_month_name =  month_name, registration_year = year) %>% # rename for clarity
+  group_by(registration_month) %>% 
+  filter(activity_month == registration_month + 1) %>% 
+  summarize(second_month_retention = count_active / count_registered,
+            registration_month_name = registration_month_name,
+            registration_year = registration_year)
+
+
+
+
+```
+
+
+
+```{r plot second month retention by monthly cohort, message = FALSE, warning = FALSE}
+
+#
+plot_second_month_retention_by_registration_cohort <-
+  monthly_cohort_retention %>% 
+  ggplot(aes(x = registration_month, y = second_month_retention)) +
+  geom_point_interactive(size = 2, aes(x = registration_month,
+                                       y = second_month_retention,
+                                       tooltip = paste0("Registered: ", registration_month_name, " of ", registration_year,
+                                                        "\n\n",
+                                                        scales::percent(second_month_retention, accuracy = 0.01), " retained in second month"))) +
+  geom_line_interactive() +
+  theme_calc() +
+  labs(x = "Month of Registration", 
+       y = "Second Month Retention Rate", 
+       title = "Second Month Retention Rate by Registration Cohort")
+
+# show interactive plot
+ggiraph(ggobj = plot_second_month_retention_by_registration_cohort)
+
 
 
 
