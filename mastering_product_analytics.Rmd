@@ -1,0 +1,70 @@
+---
+title: "Mastering Product Analytics"
+author: "John Joyce"
+date: "5/23/2021"
+output: html_document
+    theme: "cosmo"
+    code_folding: hide
+---
+
+```{r load libraries and data, warning=FALSE, message=FALSE}
+# libraries
+library(tidyverse)
+library(ggthemes)
+library(ggiraph)
+library(scales)
+
+# load data from semicolon-delimited file
+activity <- read_delim("activity.csv", delim = ";")
+registrations <- read_delim("registrations.csv", delim = ";")
+
+```  
+
+```{r group and count registrations, warning=FALSE, message=FALSE}
+
+# # make sure there are no duplicate IDs
+# registrations$id %>% duplicated() %>% sum()
+# # this returns 0, so we're good!
+
+# get registration counts grouped by month
+registrations_by_month <- 
+  registrations %>% 
+  group_by(registration_month) %>% 
+  count() %>% # get counts
+  mutate(year = ifelse(registration_month %in% 1:12, "Previous Year", "Current Year")) %>% # label the years
+  mutate(month_name = ifelse(registration_month %in% 1:12, month.name[registration_month], month.name[registration_month - 12])) %>% 
+  group_by(month_name) %>% # convert numbers to month names
+  mutate(year_over_year = (n - lag(n, 1)) / lag(n,1)) %>%  # calculate year-over-year change
+  ungroup()
+
+```
+
+
+```{r plot registrations by month, warning=FALSE, message=FALSE}
+
+# ggplot of registrations by month
+plot_registrations_by_month <-
+  registrations_by_month %>% 
+  ggplot(aes(x = registration_month, y = n)) +
+  geom_col_interactive(fill = "lavenderblush4", 
+                       aes(data_id = month_name, 
+                           tooltip = paste0(month_name,
+                                            "\n",
+                                            "\n",
+                                            n, " registrations",
+                                            ifelse(is.na(year_over_year), 
+                                                   "",
+                                                   paste0("\n\n", 
+                                                          scales::percent(year_over_year, accuracy = 0.01), 
+                                                          " YOY change"))))) +
+  theme_calc() +
+  labs(x = "Registration Month", y = "Count", title = "Registration Growth")
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_registrations_by_month,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+
+```  
+  
