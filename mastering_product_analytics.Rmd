@@ -22,10 +22,6 @@ registrations <- read_delim("registrations.csv", delim = ";")
 
 ```{r group and count registrations, warning=FALSE, message=FALSE}
 
-# # make sure there are no duplicate IDs
-# registrations$id %>% duplicated() %>% sum()
-# # this returns 0, so we're good!
-
 # get registration counts grouped by month
 registrations_by_month <- 
   registrations %>% 
@@ -68,3 +64,66 @@ ggiraph(ggobj = plot_registrations_by_month,
 
 ```  
   
+```{r group and count activity,  warning = FALSE, message = FALSE}
+
+activity_by_month <- 
+  activity %>% 
+  group_by(activity_month) %>% 
+  count() %>% # get counts
+  mutate(year = ifelse(activity_month %in% 1:12, "Previous Year", "Current Year")) %>% # label the years
+  mutate(month_name = ifelse(activity_month %in% 1:12, month.name[activity_month], month.name[activity_month - 12])) %>% 
+  group_by(month_name) %>% # convert numbers to month names
+  mutate(year_over_year = (n - lag(n, 1)) / lag(n,1)) %>%  # calculate year-over-year change
+  ungroup()
+
+
+
+```
+
+
+
+```{r plot activity by month, warning = FALSE, message = FALSE}
+
+# ggplot of activity by month
+plot_activity_by_month <-
+  activity_by_month %>% 
+  ggplot(aes(x = activity_month, y = n)) +
+  geom_col_interactive(fill = "honeydew4", 
+                       aes(data_id = month_name, 
+                           tooltip = paste0(month_name,
+                                            "\n",
+                                            "\n",
+                                            n, " active users",
+                                            ifelse(is.na(year_over_year), 
+                                                   "",
+                                                   paste0("\n\n", 
+                                                          scales::percent(year_over_year, accuracy = 0.01), 
+                                                          " YOY change"))))) +
+  theme_calc() +
+  labs(x = "Month", y = "Count", title = "Active User Growth")
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_activity_by_month,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+```  
+  
+
+```{r second month retention, warning = FALSE, message = FALSE}
+
+# this is a tricky question...
+# you must use both registrations.csv and activity.csv
+# because not all registered users in month 1 were also active in month 1
+# therefore, some users who registered are only represented in registrations.csv
+
+monthly_cohort_retention <-
+activity %>% 
+  group_by(registration_month, activity_month) %>% 
+  count() %>% 
+  rename(count_active = n)
+
+
+
+
+```
