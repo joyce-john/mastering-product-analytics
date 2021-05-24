@@ -19,6 +19,8 @@ library(ggthemes)
 library(ggiraph)
 library(scales)
 library(kableExtra)
+library(fable)
+library(tsibble)
 
 # load data from semicolon-delimited file
 activity <- read_delim("activity.csv", delim = ";")
@@ -27,6 +29,8 @@ registrations <- read_delim("registrations.csv", delim = ";")
 ```  
 
 # Acquisition  
+
+## Global Registrations
 
 Let's start out by examining registrations. We'll count the number of registrations in each month with the code below. We'll also calculate year-over-year percentage changes for the eligible months.  
 
@@ -51,6 +55,7 @@ registrations_by_month %>%
   scroll_box(height = "350px")
 
 ```  
+\  
   
 We'll plot this data below. We'll use a bar graph so that it's easy to compare values from one year against another - just hover over a column to highlight identical months. A dotted line separates the two years.  
 
@@ -62,7 +67,7 @@ plot_registrations_by_month <-
   ggplot(aes(x = registration_month, y = count_registered)) +
   geom_col_interactive(fill = "steelblue4",
                        aes(data_id = month_name, 
-                           tooltip = paste0(month_name,
+                           tooltip = paste0(month_name, " of ", year,
                                             "\n",
                                             "\n",
                                             count_registered, " registrations",
@@ -84,7 +89,79 @@ ggiraph(ggobj = plot_registrations_by_month,
 ```  
   
   
-We notice some low points in January - Feburary and June - July (possibly including August). Our stronger months appear to be March - May and September - November. Based on the data we have, it seems that we acquire the most users in the **spring** and **autumn** seasons, and experience a slump in **winter** and **summer**.  
+We notice some low points in **January - Feburary** and **June - July** (possibly including **August**). Our stronger months appear to be **March - May** and **September - November**.  
+
+Based on the data we have, it seems that we acquire the most users in the **spring** and **autumn** seasons, and experience a slump in **winter** and **summer**.  
+
+What would we project for month 22? If we fit an auto ARIMA model with the existing data, we get the forecast shown with the red column below:  
+
+```{r ARIMA registations with plot, warning = FALSE, message = FALSE}
+
+# create tsibble object for use with fable package
+registrations_tsibble <- 
+as_tsibble(registrations_by_month, index = registration_month)
+
+# fit auto ARIMA model for count of registrations
+registrations_fit <-
+model(registrations_tsibble,
+      arima = ARIMA(count_registered))
+
+# forecast 1 month into the future
+registrations_forecast <- forecast(registrations_fit, h = 1)
+
+# create a 1-row dataframe with the stats for the forecast
+registrations_forecast_row <- 
+data.frame(
+  "registration_month" = 22,
+  "count_registered" = round(registrations_forecast$.mean, 0),
+  "year" = "Current Year",
+  "month_name" = "October",
+  "year_over_year" = (registrations_forecast$.mean - registrations_by_month$count_registered[10]) / registrations_by_month$count_registered[10])
+
+# bind the forecast row to the original table
+registrations_forecast_df <-
+  rbind(registrations_by_month, registrations_forecast_row)
+
+# set a factor to differentiate the forecast from the real data
+registrations_forecast_df <-
+registrations_forecast_df %>% 
+  mutate(is_forecast = ifelse(registration_month == 22, TRUE, FALSE))
+
+
+# ggplot of registrations by month - WITH RED FORECAST BAR
+plot_registrations_forecast <-
+  registrations_forecast_df %>% 
+  ggplot(aes(x = registration_month, y = count_registered)) +
+  geom_col_interactive(aes(fill = is_forecast,
+                           data_id = month_name, 
+                           tooltip = paste0(month_name, " of ", year,
+                                            "\n",
+                                            "\n",
+                                            count_registered, " registrations",
+                                            ifelse(is.na(year_over_year), 
+                                                   "",
+                                                   paste0("\n\n", 
+                                                          scales::percent(year_over_year, accuracy = 0.01), 
+                                                          " YOY change"))))) +
+  geom_vline_interactive(xintercept = 12.5, linetype = "dotted", tooltip = "end of year") +
+  theme_calc() +
+  scale_fill_manual_interactive(values = c("steelblue4", "tomato")) +
+  theme(legend.position = "none") +
+  labs(x = "Month", y = "New Registrations", title = "Registration Growth with Forecast")
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_registrations_forecast,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+
+```  
+
+We should be highly skeptical of this forecast. It suggests a -22% year-over-year change from last year's October. However, it reflects the significant uncertainty surrounding the user acquisition trend. We would have expected this year's September to be a strong month, but instead we got **fewer** registrations than last year. Could we be heading for a negative trend?   
+
+Without any additional information, I would hesitantly predict an October performance similar to last year's. The catastrophic decline suggested by the auto-ARIMA prediction seems a bit unlikely, and may be due to a lack of historical seasonal data for the model. However, given the poor growth in September, we shouldn't be surprised if we acquire fewer users than last year.  
+
+## Regional Registrations
 
 What are the acquisition trends in different regions?  
 
@@ -108,7 +185,7 @@ plot_registrations_by_month_and_region <-
   ggplot(aes(x = registration_month, y = count_registered)) +
   geom_col_interactive(aes(fill =  region,
                            data_id = month_name, 
-                           tooltip = paste0(month_name,
+                           tooltip = paste0(month_name, " of ", year,
                                             "\n",
                                             "\n",
                                             count_registered, " registrations",
@@ -130,6 +207,52 @@ ggiraph(ggobj = plot_registrations_by_month_and_region,
 
 
 ```  
+  
+The seasonal pattern we saw above holds true for the **ROW** and **EMEA** regions: weaker growth winter and summer, stronger growth in spring and autumn. For **America**, we spot a couple notable exceptions: growth in current-year January that is on-par with the best months, and a very weak current-year May.   
+
+We can see that the broad Rest of World (ROW) region is our biggest segment, by far. We might initially assume that this is our most import region if we want to grow further. What if we plot **year-over-year registration growth** as a percentage for the different regions? (In this case, we can only examine months 13-21.)  
+
+```{r create regions YOY acquisitions plot, warning = FALSE, message = FALSE}
+
+
+# create new plots that show the monthly YOY change by region
+plot_registrations_yoy_growth_by_region <-
+  registrations_by_month_and_region %>% 
+  filter(!is.na(year_over_year)) %>% 
+  ggplot(aes(x = registration_month, y = year_over_year)) +
+  geom_col_interactive(aes(fill =  region,
+                           data_id = month_name, 
+                           tooltip = paste0(month_name, " of ", year,
+                                            "\n",
+                                            "\n",
+                                            count_registered, " registrations",
+                                            ifelse(is.na(year_over_year), 
+                                                   "",
+                                                   paste0("\n\n", 
+                                                          scales::percent(year_over_year, accuracy = 0.01), 
+                                                          " YOY change"))))) +
+  geom_vline_interactive(xintercept = 12.5, linetype = "dotted", tooltip = "end of year") +
+  theme_calc() +
+  labs(x = "Month", y = "YOY Change", title = "Year-over-year Growth Rate by Region") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = scales::percent) +
+  facet_wrap(~ region)
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_registrations_yoy_growth_by_region,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+```  
+  
+  
+We see an alarming visual here. While the **ROW** region was having a solid summer with outstanding year-over-year registration growth in July, **America** and **EMEA** saw several months of declining growth.  
+
+Based on our data, we should expect **ROW** to be our growth market, based on its larger size and better trajectory. We may need to pay special attention to **America** and **EMEA** if we want to grow registrations in these segments. 
+
+# Activity  
+
+Let's take a look at user activity. How many users were active each month?  
 
 ```{r group and count activity,  warning = FALSE, message = FALSE}
 
@@ -144,11 +267,16 @@ activity_by_month <-
   mutate(year_over_year = (count_active - lag(count_active, 1)) / lag(count_active,1)) %>%  # calculate year-over-year change
   ungroup()
 
+# show html table
+activity_by_month %>% 
+  kable() %>% 
+  kable_styling(c("striped", "hover")) %>% 
+  scroll_box(height = "350px")
 
+```  
+\  
 
-```
-
-
+The active user count appears to be growing. We notice some lower points in the summer and winter seasons, which are also the seasons with lower registrations. Even the lowest point in the current year (August) has more active users than many months in the previous year.  
 
 ```{r plot activity by month, warning = FALSE, message = FALSE}
 
@@ -158,7 +286,7 @@ plot_activity_by_month <-
   ggplot(aes(x = activity_month, y = count_active)) +
   geom_col_interactive(fill = "honeydew4", 
                        aes(data_id = month_name, 
-                           tooltip = paste0(month_name,
+                           tooltip = paste0(month_name, " of ", year,
                                             "\n",
                                             "\n",
                                             count_active, " active users",
@@ -167,8 +295,9 @@ plot_activity_by_month <-
                                                    paste0("\n\n", 
                                                           scales::percent(year_over_year, accuracy = 0.01), 
                                                           " YOY change"))))) +
+  geom_vline_interactive(xintercept = 12.5, linetype = "dotted", tooltip = "end of year") +
   theme_calc() +
-  labs(x = "Month", y = "Count", title = "Active User Growth")
+  labs(x = "Month", y = "Count", title = "Active Users")
 
 # show plot with highlight on month type when the user hovers
 ggiraph(ggobj = plot_activity_by_month,
@@ -177,12 +306,15 @@ ggiraph(ggobj = plot_activity_by_month,
 
 ```  
   
+# Retention
+
+To analyze retention, we need to draw data from both the *registrations* and *activity* tables. This is because **not all users who registered became active**, so the list of users in the *activity* table is not a complete list. We'll take a look at **second-month retention**, which tells us what proportion of users were **active** in their second month after registering. We'll split users into cohorts according to the month in which they registered.  
 
 ```{r second month retention, warning = FALSE, message = FALSE}
 
 # this is a tricky question...
 # you must use both registrations.csv and activity.csv
-# because not all registered users in month 1 were active in month 1
+# not all users who registered became active
 # therefore, some users who registered are only represented in registrations.csv
 
 monthly_cohort_retention <-
@@ -200,11 +332,21 @@ activity %>%
             registration_year = registration_year)
 
 
-
+# show html table
+monthly_cohort_retention %>% 
+  kable() %>% 
+  kable_styling(c("striped", "hover")) %>% 
+  scroll_box(height = "350px")
 
 ```
+\   
 
+Of the users who registered in **month 1**, `r scales::percent(monthly_cohort_retention$second_month_retention[1], accuracy = 0.01)` were active in their second month.  
+Of the users who registered in **month 13**, `r scales::percent(monthly_cohort_retention$second_month_retention[13], accuracy = 0.01)` were active in their second month.  
 
+Why is there a drop in second-month retention from last year's January cohort to this year's January cohort? The product likely attracted a different type of user when it was brand new in month 1. Users who registered when the product was brand new were likely **highly motivated by the product's unique value**. Perhaps that's why they were willing to try something completely new and unproven. But users who registered in month 13 might have had other reasons for trying the product: it was recommended to them by a friend, they saw an advertisement, they were required to use it for work, etc.   
+
+We shouldn't expect retention rates to be the same among early adopters and users who register when the product is more mature. In fact, the graph below shows that the product's second-month retention rate **peaked with the month 2 cohort** and fell sharply after month 4.  
 
 ```{r plot second month retention by monthly cohort, message = FALSE, warning = FALSE}
 
@@ -218,6 +360,7 @@ plot_second_month_retention_by_registration_cohort <-
                                                         "\n\n",
                                                         scales::percent(second_month_retention, accuracy = 0.01), " retained in second month"))) +
   geom_line_interactive() +
+  scale_y_continuous(labels = scales::percent) +
   theme_calc() +
   labs(x = "Month of Registration", 
        y = "Second Month Retention Rate", 
@@ -230,4 +373,6 @@ ggiraph(ggobj = plot_second_month_retention_by_registration_cohort)
 
 
 
-```
+```  
+  
+We see particularly weak retention among users who joined in December or July, following a similar pattern we saw in our acquisition and activity metrics.  
