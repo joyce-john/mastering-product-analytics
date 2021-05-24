@@ -10,7 +10,7 @@ output:
 
 # Introduction  
 
-This is a sample analysis of key metrics for a software-as-a-service product. The usage data  is based off a real SaaS product; it has been subsampled and simplified for this task. We'll take a look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
+This is an analysis of key metrics for a software-as-a-service product. The data is based off a real SaaS product; it has been subsampled and simplified for this task. We'll take a look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
 
 ```{r load libraries and data, warning=FALSE, message=FALSE}
 # libraries
@@ -32,7 +32,7 @@ registrations <- read_delim("registrations.csv", delim = ";")
 
 ## Global Registrations
 
-Let's start out by examining registrations. We'll count the number of registrations in each month with the code below. We'll also calculate year-over-year percentage changes for the eligible months.  
+Let's start out by examining registrations. We'll count the number of registrations in each month. We'll also calculate year-over-year percentage changes for the eligible months.  
 
 ```{r group and count registrations, warning=FALSE, message=FALSE}
 
@@ -57,7 +57,7 @@ registrations_by_month %>%
 ```  
 \  
   
-We'll plot this data below. We'll use a bar graph so that it's easy to compare values from one year against another - just hover over a column to highlight identical months. A dotted line separates the two years.  
+We'll plot this data below. We'll use a bar graph so that it's easy to compare values from one year against another - just hover over a column to highlight identical months. A dotted line separates the first and second years of product data.   
 
 ```{r plot registrations by month, warning=FALSE, message=FALSE}
 
@@ -157,9 +157,10 @@ ggiraph(ggobj = plot_registrations_forecast,
 
 ```  
 
-We should be highly skeptical of this forecast. It suggests a -22% year-over-year change from last year's October. However, it reflects the significant uncertainty surrounding the user acquisition trend. We would have expected this year's September to be a strong month, but instead we got **fewer** registrations than last year. Could we be heading for a negative trend?   
+We should be skeptical of this forecast. It suggests a -22% year-over-year change from last year's October. However, it reflects the significant uncertainty surrounding the user acquisition trend. We would have expected this year's September to be a strong month, because the year-over-year growth was positive for all preceding months. But growth slowed in August and turned negative in September, so we ended up with **fewer** registrations this September than last year. What does that mean for October? Could we be heading for a negative trend?   
 
-Without any additional information, I would hesitantly predict an October performance similar to last year's. The catastrophic decline suggested by the auto-ARIMA prediction seems a bit unlikely, and may be due to a lack of historical seasonal data for the model. However, given the poor growth in September, we shouldn't be surprised if we acquire fewer users than last year.  
+Without any additional information, I would hesitantly predict an October performance similar to, or somewhat weaker than, last year's. The catastrophic decline suggested by the auto-ARIMA prediction seems a bit unlikely, and may be due to a lack of historical seasonal data for the model. However, given the poor growth in September, we shouldn't be surprised if we acquire fewer users than last year.    
+
 
 ## Regional Registrations
 
@@ -250,7 +251,9 @@ We see an alarming visual here. While the **ROW** region was having a solid summ
 
 Based on our data, we should expect **ROW** to be our growth market, based on its larger size and better trajectory. We may need to pay special attention to **America** and **EMEA** if we want to grow registrations in these segments. 
 
-# Activity  
+# Activity
+
+## Global Activity
 
 Let's take a look at user activity. How many users were active each month?  
 
@@ -306,6 +309,51 @@ ggiraph(ggobj = plot_activity_by_month,
 
 ```  
   
+## Active Users in America  
+
+What percentage of active users are in the American region? Does it change over time?  
+
+```{r percentage of activity in america, warning = FALSE, message = FALSE}
+
+# count active users in America by month
+# then join table of all active users by month and calculate proportion
+activity_by_month_america <- 
+  activity %>% 
+  filter(region == "America") %>% 
+  group_by(activity_month) %>% 
+  count() %>% # get counts
+  rename(count_active_america = n) %>% 
+  left_join(activity_by_month, by = "activity_month") %>% 
+  mutate(proportion_america = count_active_america / count_active) %>% 
+  select(-"year_over_year") # drop irrelevant column
+
+# point and line chart of percentage of active users in America
+plot_activity_by_month_america <-
+  activity_by_month_america %>% 
+  ggplot(aes(x = activity_month, y = proportion_america)) +
+  geom_point_interactive(aes(tooltip = paste0(month_name, " of ", year,
+                                              "\n\n",
+                                              scales::percent(proportion_america, accuracy = 0.01)))) +
+  geom_line_interactive() +
+  theme_calc() +
+  labs(x = "Month", y = "Active Users in America", title = "Percentage of Active Users in America") +
+  scale_y_continuous(labels = scales::percent) +
+  theme(legend.position = "none")
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_activity_by_month_america,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+```  
+  
+We can make two interesting observations from this chart.  
+  
+First, the share of Americans among active users seems to be declining in general. This matches with out earlier findings that **ROW** was the real growth market for the product.  
+
+Second, the share of Americans among active users drops sharply in May. We expect engagement with the product to be lower in summer, but this drop appears to be more dramatic in the American market than the other regions (or else the percentage would remain level).  
+
+
 # Retention
 
 To analyze retention, we need to draw data from both the *registrations* and *activity* tables. This is because **not all users who registered became active**, so the list of users in the *activity* table is not a complete list. We'll take a look at **second-month retention**, which tells us what proportion of users were **active** in their second month after registering. We'll split users into cohorts according to the month in which they registered.  
@@ -344,7 +392,7 @@ monthly_cohort_retention %>%
 Of the users who registered in **month 1**, `r scales::percent(monthly_cohort_retention$second_month_retention[1], accuracy = 0.01)` were active in their second month.  
 Of the users who registered in **month 13**, `r scales::percent(monthly_cohort_retention$second_month_retention[13], accuracy = 0.01)` were active in their second month.  
 
-Why is there a drop in second-month retention from last year's January cohort to this year's January cohort? The product likely attracted a different type of user when it was brand new in month 1. Users who registered when the product was brand new were likely **highly motivated by the product's unique value**. Perhaps that's why they were willing to try something completely new and unproven. But users who registered in month 13 might have had other reasons for trying the product: it was recommended to them by a friend, they saw an advertisement, they were required to use it for work, etc.   
+Why is there a drop in second-month retention from last year's January cohort to this year's January cohort? The product likely attracted a different type of user when it was brand new in month 1. Users who registered when the product was brand new were probably **highly motivated by the product's unique value**. Perhaps that's why they were willing to try something completely new and unproven. But users who registered in month 13 might have had other reasons for trying the product: it was recommended to them by a friend, they saw an advertisement, they were required to use it for work, etc. Maybe they had a weaker motivation to stick around.   
 
 We shouldn't expect retention rates to be the same among early adopters and users who register when the product is more mature. In fact, the graph below shows that the product's second-month retention rate **peaked with the month 2 cohort** and fell sharply after month 4.  
 
@@ -375,4 +423,4 @@ ggiraph(ggobj = plot_second_month_retention_by_registration_cohort)
 
 ```  
   
-We see particularly weak retention among users who joined in December or July, following a similar pattern we saw in our acquisition and activity metrics.  
+The lowest retention rates are among users who joined in December or July of the previous year. This follows a similar pattern we saw with acquisition and activity: the product has less appeal in winter and summer. Retaining these users might require an extra effort.  
