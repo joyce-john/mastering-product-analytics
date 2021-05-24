@@ -2,7 +2,8 @@
 title: "Mastering Product Analytics"
 author: "John Joyce"
 date: "5/23/2021"
-output: html_document
+output:
+  html_document:
     theme: "cosmo"
     code_folding: hide
 ---
@@ -17,6 +18,7 @@ library(tidyverse)
 library(ggthemes)
 library(ggiraph)
 library(scales)
+library(kableExtra)
 
 # load data from semicolon-delimited file
 activity <- read_delim("activity.csv", delim = ";")
@@ -26,7 +28,7 @@ registrations <- read_delim("registrations.csv", delim = ";")
 
 # Acquisition  
 
-Let's start out by examining registrations. 
+Let's start out by examining registrations. We'll count the number of registrations in each month with the code below. We'll also calculate year-over-year percentage changes for the eligible months.  
 
 ```{r group and count registrations, warning=FALSE, message=FALSE}
 
@@ -42,8 +44,15 @@ registrations_by_month <-
   mutate(year_over_year = (count_registered - lag(count_registered, 1)) / lag(count_registered,1)) %>%  # calculate year-over-year change
   ungroup()
 
-```
+# show html table
+registrations_by_month %>% 
+  kable() %>% 
+  kable_styling(c("striped", "hover")) %>% 
+  scroll_box(height = "350px")
 
+```  
+  
+We'll plot this data below. We'll use a bar graph so that it's easy to compare values from one year against another - just hover over a column to highlight identical months. A dotted line separates the two years.  
 
 ```{r plot registrations by month, warning=FALSE, message=FALSE}
 
@@ -51,7 +60,7 @@ registrations_by_month <-
 plot_registrations_by_month <-
   registrations_by_month %>% 
   ggplot(aes(x = registration_month, y = count_registered)) +
-  geom_col_interactive(fill = "lavenderblush4", 
+  geom_col_interactive(fill = "steelblue4",
                        aes(data_id = month_name, 
                            tooltip = paste0(month_name,
                                             "\n",
@@ -62,6 +71,7 @@ plot_registrations_by_month <-
                                                    paste0("\n\n", 
                                                           scales::percent(year_over_year, accuracy = 0.01), 
                                                           " YOY change"))))) +
+  geom_vline_interactive(xintercept = 12.5, linetype = "dotted", tooltip = "end of year") +
   theme_calc() +
   labs(x = "Month", y = "New Registrations", title = "Registration Growth")
 
@@ -73,6 +83,54 @@ ggiraph(ggobj = plot_registrations_by_month,
 
 ```  
   
+  
+We notice some low points in January - Feburary and June - July (possibly including August). Our stronger months appear to be March - May and September - November. Based on the data we have, it seems that we acquire the most users in the **spring** and **autumn** seasons, and experience a slump in **winter** and **summer**.  
+
+What are the acquisition trends in different regions?  
+
+```{r create regions acquisition table and plot, warning = FALSE, message = FALSE}
+
+# get registration counts grouped by month AND also by region
+registrations_by_month_and_region <- 
+  registrations %>% 
+  group_by(registration_month, region) %>% 
+  count() %>% # get counts
+  rename(count_registered = n) %>% 
+  mutate(year = ifelse(registration_month %in% 1:12, "Previous Year", "Current Year")) %>% # label the years
+  mutate(month_name = ifelse(registration_month %in% 1:12, month.name[registration_month], month.name[registration_month - 12])) %>% 
+  group_by(month_name, region) %>% # convert numbers to month names
+  mutate(year_over_year = (count_registered - lag(count_registered, 1)) / lag(count_registered,1)) %>%  # calculate year-over-year change
+  ungroup()
+
+# create new plots that show the monthly AND regional acquisition
+plot_registrations_by_month_and_region <-
+  registrations_by_month_and_region %>% 
+  ggplot(aes(x = registration_month, y = count_registered)) +
+  geom_col_interactive(aes(fill =  region,
+                           data_id = month_name, 
+                           tooltip = paste0(month_name,
+                                            "\n",
+                                            "\n",
+                                            count_registered, " registrations",
+                                            ifelse(is.na(year_over_year), 
+                                                   "",
+                                                   paste0("\n\n", 
+                                                          scales::percent(year_over_year, accuracy = 0.01), 
+                                                          " YOY change"))))) +
+  geom_vline_interactive(xintercept = 12.5, linetype = "dotted", tooltip = "end of year") +
+  theme_calc() +
+  labs(x = "Month", y = "New Registrations", title = "Registration Growth by Region") +
+  theme(legend.position = "none") +
+  facet_wrap(~ region)
+
+# show plot with highlight on month type when the user hovers
+ggiraph(ggobj = plot_registrations_by_month_and_region,
+        options = list(opts_hover_inv(css = "opacity:0.2;")))
+
+
+
+```  
+
 ```{r group and count activity,  warning = FALSE, message = FALSE}
 
 activity_by_month <- 
