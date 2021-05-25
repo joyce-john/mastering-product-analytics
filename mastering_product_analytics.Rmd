@@ -10,7 +10,7 @@ output:
 
 # Introduction  
 
-This is an analysis of key metrics for a software-as-a-service product. The data is based off a real SaaS product; it has been subsampled and simplified for this task. We'll take a look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
+This is an analysis of key metrics for a software-as-a-service product. The data is based off a real SaaS product; it has been subsampled and simplified for this task. We'll *activity.csv* and *registrations.csv* to take look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
 
 ```{r load libraries and data, warning=FALSE, message=FALSE}
 # libraries
@@ -157,7 +157,7 @@ ggiraph(ggobj = plot_registrations_forecast,
 
 ```  
 
-We should be skeptical of this forecast. It suggests a -22% year-over-year change from last year's October. However, it reflects the significant uncertainty surrounding the user acquisition trend. We would have expected this year's September to be a strong month, because the year-over-year growth was positive for all preceding months. But growth slowed in August and turned negative in September, so we ended up with **fewer** registrations this September than last year. What does that mean for October? Could we be heading for a negative trend?   
+We might be skeptical of this forecast. It suggests a -22% year-over-year change from last year's October. However, it reflects the significant uncertainty surrounding the user acquisition trend. We would have expected this year's September to be a strong month, because the year-over-year growth was positive for all preceding months. But growth slowed in August and turned negative in September, so we ended up with **fewer** registrations this September than last year. What does that mean for October? Could we be heading for a negative trend?   
 
 Without any additional information, I would hesitantly predict an October performance similar to, or somewhat weaker than, last year's. The catastrophic decline suggested by the auto-ARIMA prediction seems a bit unlikely, and may be due to a lack of historical seasonal data for the model. However, given the poor growth in September, we shouldn't be surprised if we acquire fewer users than last year.    
 
@@ -211,7 +211,7 @@ ggiraph(ggobj = plot_registrations_by_month_and_region,
   
 The seasonal pattern we saw above holds true for the **ROW** and **EMEA** regions: weaker growth winter and summer, stronger growth in spring and autumn. For **America**, we spot a couple notable exceptions: growth in current-year January that is on-par with the best months, and a very weak current-year May.   
 
-We can see that the broad Rest of World (ROW) region is our biggest segment, by far. We might initially assume that this is our most import region if we want to grow further. What if we plot **year-over-year registration growth** as a percentage for the different regions? (In this case, we can only examine months 13-21.)  
+We can see that the broad Rest of World (ROW) region is our biggest segment, by far. What if we plot **year-over-year registration growth** as a percentage for the different regions? (In this case, we can only examine months 13-21.)  
 
 ```{r create regions YOY acquisitions plot, warning = FALSE, message = FALSE}
 
@@ -349,9 +349,9 @@ ggiraph(ggobj = plot_activity_by_month_america,
   
 We can make two interesting observations from this chart.  
   
-First, the share of Americans among active users seems to be declining in general. This matches with out earlier findings that **ROW** was the real growth market for the product.  
+First, the share of Americans among active users seems to be declining in general. This matches with our earlier findings that **ROW** was the real growth market for the product.  
 
-Second, the share of Americans among active users drops sharply in May. We expect engagement with the product to be lower in summer, but this drop appears to be more dramatic in the American market than the other regions (or else the percentage would remain level).  
+Second, the share of Americans among active users drops sharply in May of both years. We expect engagement with the product to be lower in summer, but this drop appears to be more dramatic in the American market than the other regions (or else the percentage share would remain level).  
 
 
 # Retention
@@ -424,3 +424,13 @@ ggiraph(ggobj = plot_second_month_retention_by_registration_cohort)
 ```  
   
 The lowest retention rates are among users who joined in December or July of the previous year. This follows a similar pattern we saw with acquisition and activity: the product has less appeal in winter and summer. Retaining these users might require an extra effort.  
+
+# Conclusions  
+
+Here are a few quick conclusions about the product:  
+
+* **Registration growth may be slowing.** Registrations are already in negative year-over-year territory in the EMEA and America markets, and the past two months in the ROW market have been concerning. We should figure out why this is happening.  
+
+* **Global activity looks healthy, for now.** The overall activity numbers are not bad. We see that American users are a shrinking proportion of the userbase and we can expect this trend to continue if ROW remains the big growth market. In the long run, we need to fix any problems with user acquisition if we want activity to keep growing.  
+
+* **Retention varies by registration time.** The February and August cohorts have good second-month retention, but the May and June cohorts look awful. We need to study the different user experiences between high-retention cohorts and low-retention cohorts.  
