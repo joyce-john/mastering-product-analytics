@@ -10,7 +10,7 @@ output:
 
 # Introduction  
 
-This is an analysis of key metrics for a software-as-a-service product. The data is based off a real SaaS product; it has been subsampled and simplified for this task. We'll *activity.csv* and *registrations.csv* to take look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
+This is an analysis of key metrics for a software-as-a-service product. The data is based off a real SaaS product; it has been subsampled and simplified for this task. We'll use *activity.csv* and *registrations.csv* to take look at user **acquisition**, **activity**, and **retention**. We have 21 months of data for this product.   
 
 ```{r load libraries and data, warning=FALSE, message=FALSE}
 # libraries
